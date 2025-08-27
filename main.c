@@ -23,7 +23,7 @@ typedef struct
   } velocity;
   bool onGround;
   Texture2D player_texture;
-}player;
+}Player;
 
 enum Entities{
   PLAYER = 0,
@@ -155,7 +155,7 @@ void updatePlayer(Player *pl)
 int main() {
     InitWindow(SCREEN_WIDTH, SCREEN_HEIGHT, "C raylib template");
     SetTargetFPS(60);
-
+    Player player;
     player.x = 10;
     player.y = SCREEN_HEIGHT - P_HEIGHT - FRAME_SIZE;
     player.velocity.x = 0;
