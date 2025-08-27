@@ -9,6 +9,8 @@
 #define FRAME_SIZE 100.0f
 #define CFRAME_SIZE 32.0f
 #define BFRAME_SIZE 290.0f
+#define B_FRAME_SIZE 250.0f
+
 
 
 #define GRAVITY 9.8f
@@ -167,6 +169,7 @@ int main() {
     Texture2D angel_texture = LoadTexture("resources/angelcatt.png");
     player.player_texture = LoadTexture("resources/chomp_idle.png");
     Texture2D brocolli_texture = LoadTexture("resources/brocollli.png");
+    Texture2D brocolli_char_texture = LoadTexture("resources/brocolli_char.png");
         // Animation anim = (Animation){
         //     .first = 0,
         //     .last = 3,
@@ -201,6 +204,7 @@ int main() {
         Animation reverse_anim = {0, 3, 3, -1, 0.1, 0.1, REPEATING};
         Animation chomp_anim = {0, 34, 0, 1, 0.1, 0.1, REPEATING};
         Animation brocolli_anim = {0, 3, 0, 1, 0.2, 0.2, REPEATING};
+        Animation brocolli_char_anim = {0, 3, 0, 1, 0.2, 0.2, REPEATING};
         Direction player_direction = LEFT;
 
 
@@ -245,7 +249,10 @@ int main() {
         animation_update(&anim2);
         animation_update(&chomp_anim);
         animation_update(&brocolli_anim);
+        animation_update(&brocolli_char_anim);
+
         updatePlayer(&player);
+
 
         BeginDrawing();
 
@@ -283,8 +290,12 @@ int main() {
         Rectangle brocolli_frame = animation_frame(&brocolli_anim, 4, BFRAME_SIZE);
         Rectangle brocolli_rect = {-player.x+300, player.y - 200, BFRAME_SIZE, BFRAME_SIZE};
         DrawTexturePro(brocolli_texture, brocolli_frame, brocolli_rect, (Vector2){200, 0}, 0.0f, WHITE);
+
+        Rectangle brocollichar_frame = animation_frame(&brocolli_char_anim, 4, B_FRAME_SIZE);
+        Rectangle brocollichar_rect = {-player.x+500, player.y - 200, B_FRAME_SIZE, B_FRAME_SIZE};
+        DrawTexturePro(brocolli_char_texture, brocollichar_frame, brocollichar_rect, (Vector2){200, 0}, 0.0f, WHITE);
         // Draw controls
-        DrawText("Press SPACE to jump (Angel)", 10, 10, 20, BLACK);
+        DrawText("Press SPACE to jusmp (Angel)", 10, 10, 20, BLACK);
         DrawText("Press A/D or LEFT/RIGHT to move (Angel)", 10, 40, 20, BLACK);
         DrawFPS(10, SCREEN_HEIGHT - 30);
         EndDrawing();
