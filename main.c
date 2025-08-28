@@ -6,6 +6,7 @@
 #define SCREEN_WIDTH 1200
 #define SCREEN_HEIGHT 600
 
+//--------frame sizes will make them customizable later instead of using multiple micros will use only one macro(all sprites same sized) or will manually enter the size of frame. not sure -------
 #define FRAME_SIZE 100.0f
 #define CFRAME_SIZE 32.0f
 #define BFRAME_SIZE 290.0f
@@ -15,36 +16,59 @@
 
 #define GRAVITY 9.8f
 #define TIME_STEP 0.1f
-#define P_HEIGHT 100.0f
+#define P_HEIGHT 200.0f
 #define JUMP_VELOCITY -45.0f
+#define MAX_BUILDINGS   100
 
-typedef struct
-{
-  float x,y;
-  struct {
-    float x,y;
-  } velocity;
-  bool onGround;
-  Texture2D player_texture;
-}Player;
 
-enum Entities{
-  PLAYER = 0,
-  CROP ,
-  BUDDY ,
-  FOOD,
-}Entities;
-typedef enum AnimationType {
-  REPEATING = 0,
-  ONESHOT ,
-} AnimationType;
-
+//--------types---------
+typedef struct Position{
+	float x,y,z;
+}Position;
+typedef struct Velocity{
+	float x,y,z;
+}Velocity;
 typedef enum Direction {
   // used to flip the width component of a sprite's source rectangle, hence the
   // -1
   LEFT = -1,
   RIGHT = 1,
 } Direction;
+// -------- entities-----------
+typedef struct Player{
+  float x,y;
+  Velocity velocity;
+  bool onGround;
+  Texture2D player_texture;
+	Rectangle frame;
+}Player;
+
+typedef enum Entities{
+  PLAYER = 0,
+  ANIMAL,
+  CROP ,
+  BUDDY ,
+  FOOD,
+}Entities;
+
+typedef struct Animal{
+	Position position;
+	Texture2D texture;
+	float happiness;
+	float hunger;
+}Animal;
+
+typedef struct Crop{
+	Position position;
+	float growth_stage;
+	float timer;
+}Crop;
+
+typedef enum AnimationType {
+  REPEATING = 0,
+  ONESHOT ,
+} AnimationType;
+
 
 // the range domain of the animation if [first, last], inclusive on both ends
 typedef struct Animation {
@@ -113,8 +137,8 @@ Rectangle animation_frame(Animation *self, int num_frames_per_row, int frame_siz
   return (Rectangle){
       .x = (float)x,
       .y = (float)y,
-      .width = frame_size,
-      .height = frame_size};
+      .width = (float)frame_size,
+      .height = (float)frame_size};
 }
 
 void LoadAssets()
@@ -150,26 +174,30 @@ void updatePlayer(Player *pl)
     }
 
     // Clamp player within screen
-    if (pl->x < 0) pl->x = 0;
-    if (pl->x > SCREEN_WIDTH - FRAME_SIZE) pl->x = SCREEN_WIDTH - FRAME_SIZE;
+//    if (pl->x < 0) pl->x = 0;
+//    if (pl->x > SCREEN_WIDTH - FRAME_SIZE) pl->x = SCREEN_WIDTH - FRAME_SIZE;
   
 }
 
 int main() {
     InitWindow(SCREEN_WIDTH, SCREEN_HEIGHT, "C raylib template");
+
+
+
     SetTargetFPS(60);
-    Player player;
-    player.x = 10;
-    player.y = SCREEN_HEIGHT - P_HEIGHT - FRAME_SIZE -120;
-    player.velocity.x = 0;
-    player.velocity.y = 0;
-    player.onGround = true;
+    Player player = {
+		.x = 40,
+		.y = SCREEN_HEIGHT - P_HEIGHT - FRAME_SIZE -120,
+		.velocity.x = 0,
+		.velocity.y = 0,
+		.onGround = true,
+	};
     // when no need to modify image should directly load the texture saving cpu memory of image space
     // player.player_texture = LoadTexture("resources/angelcatt.png");
-    Texture2D angel_texture = LoadTexture("resources/angelcatt.png");
+   // Texture2D angel_texture = LoadTexture("resources/angelcatt.png");
     player.player_texture = LoadTexture("resources/chomp_idle.png");
-    Texture2D brocolli_texture = LoadTexture("resources/brocollli.png");
-    Texture2D brocolli_char_texture = LoadTexture("resources/brocolli_char.png");
+   // Texture2D brocolli_texture = LoadTexture("resources/brocollli.png");
+    //Texture2D brocolli_char_texture = LoadTexture("resources/brocolli_char.png");
         // Animation anim = (Animation){
         //     .first = 0,
         //     .last = 3,
@@ -213,7 +241,33 @@ int main() {
     // Image angel = LoadImage("resources/angelcatt.png");
     // Texture2D player_texture = LoadTextureFromImage(angel);
     // UnloadImage(angel); 
+    Rectangle buildings[MAX_BUILDINGS] = { 0 };
+    Color buildColors[MAX_BUILDINGS] = { 0 };
+    int spacing = 0;
 
+    Camera2D camera = { 0 };
+    camera.target = (Vector2){ player.x + 20.0f, player.y + 20.0f };
+    camera.offset = (Vector2){ SCREEN_WIDTH/2.0f, SCREEN_HEIGHT/2.0f };
+    camera.rotation = 0.0f;
+    camera.zoom = 1.0f;
+  	
+    for (int i = 0; i < MAX_BUILDINGS; i++)
+    {
+        buildings[i].width = (float)GetRandomValue(50, 200);
+        buildings[i].height = (float)GetRandomValue(100, 800);
+        buildings[i].y = SCREEN_HEIGHT - 130.0f - buildings[i].height;
+        buildings[i].x = -6000.0f + spacing;
+
+        spacing += (int)buildings[i].width;
+
+        buildColors[i] = (Color){
+            (unsigned char)GetRandomValue(200, 240),
+            (unsigned char)GetRandomValue(200, 240),
+            (unsigned char)GetRandomValue(200, 250),
+            255};
+    }
+
+    SetTargetFPS(60);
     while (!WindowShouldClose())
     {
     // if (IsKeyPressed(KEY_SPACE)) {
@@ -253,11 +307,26 @@ int main() {
 
         updatePlayer(&player);
 
-
+        camera.target = (Vector2){player.x+30.0f , player.y + 40.0f};
         BeginDrawing();
 
         ClearBackground(GREEN);
-/** 
+
+		 BeginMode2D(camera);
+		DrawRectangle(-6000, 320, 13000, 8000, DARKGRAY);
+
+                for (int i = 0; i < MAX_BUILDINGS; i++) DrawRectangleRec(buildings[i], buildColors[i]);
+	Rectangle player_frame = animation_frame(&anim, 4, CFRAME_SIZE);
+        player_frame.width *=(float) player_direction; // Flip horizontally
+        Rectangle dest_rect = {player.x , player.y, CFRAME_SIZE *2, CFRAME_SIZE*2};
+        DrawTexturePro(player.player_texture, player_frame, dest_rect, (Vector2){0, 0}, 0.0f, WHITE);
+
+                DrawLine((int)camera.target.x, -SCREEN_HEIGHT*10, (int)camera.target.x, SCREEN_HEIGHT*10, GREEN);
+                DrawLine(-SCREEN_WIDTH*10, (int)camera.target.y, SCREEN_WIDTH*10, (int)camera.target.y, GREEN);
+
+
+		            EndMode2D();
+/**
         // DrawTextureV(player_texture,(Vector2){10,10},WHITE);
         DrawRectangleV((Vector2){0,GetScreenHeight() - P_HEIGHT},(Vector2){GetScreenWidth(), P_HEIGHT}, GRAY);
 
@@ -279,14 +348,14 @@ int main() {
            WHITE);
 **/
 
-        DrawRectangleV((Vector2){0, SCREEN_HEIGHT - P_HEIGHT}, (Vector2){SCREEN_WIDTH, P_HEIGHT}, GRAY);
+      //  DrawRectangleV((Vector2){0, SCREEN_HEIGHT - P_HEIGHT}, (Vector2){SCREEN_WIDTH, P_HEIGHT}, GRAY);
 
         // Angel animation
-        Rectangle player_frame = animation_frame(&anim, 4, CFRAME_SIZE);
+/*        Rectangle player_frame = animation_frame(&anim, 4, CFRAME_SIZE);
         player_frame.width *= player_direction; // Flip horizontally
         Rectangle angel_rect = {player.x , player.y, CFRAME_SIZE +200, CFRAME_SIZE+200};
         DrawTexturePro(player.player_texture, player_frame, angel_rect, (Vector2){0, 0}, 0.0f, WHITE);
-
+ 
         Rectangle brocolli_frame = animation_frame(&brocolli_anim, 4, BFRAME_SIZE);
         Rectangle brocolli_rect = {-player.x+300, player.y - 200, BFRAME_SIZE, BFRAME_SIZE};
         DrawTexturePro(brocolli_texture, brocolli_frame, brocolli_rect, (Vector2){200, 0}, 0.0f, WHITE);
@@ -294,9 +363,13 @@ int main() {
         Rectangle brocollichar_frame = animation_frame(&brocolli_char_anim, 4, B_FRAME_SIZE);
         Rectangle brocollichar_rect = {-player.x+500, player.y - 200, B_FRAME_SIZE, B_FRAME_SIZE};
         DrawTexturePro(brocolli_char_texture, brocollichar_frame, brocollichar_rect, (Vector2){200, 0}, 0.0f, WHITE);
+
+
+*/
         // Draw controls
         DrawText("Press SPACE to jusmp (Angel)", 10, 10, 20, BLACK);
         DrawText("Press A/D or LEFT/RIGHT to move (Angel)", 10, 40, 20, BLACK);
+
         DrawFPS(10, SCREEN_HEIGHT - 30);
         EndDrawing();
 
@@ -305,7 +378,8 @@ int main() {
 
     UnloadTexture(player.player_texture);
     // UnloadImage(angel);
-    UnloadTexture(player.player_texture);
+
     CloseWindow();
     return 0;
 }
+
