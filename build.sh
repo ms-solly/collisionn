@@ -1,6 +1,8 @@
 #!/bin/bash
 set -e
 
+echo "removing old executable.."
+rm -rf ./collision
 # Set project directories
 # Compile all .cpp files in the current directory
 echo "Compiling source files..."
