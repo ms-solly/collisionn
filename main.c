@@ -16,7 +16,7 @@
 
 #define GRAVITY 9.8f
 #define TIME_STEP 0.1f
-#define P_HEIGHT 200.0f
+#define P_HEIGHT 300.0f
 #define JUMP_VELOCITY -45.0f
 #define MAX_BUILDINGS   100
 
@@ -149,7 +149,7 @@ void LoadAssets()
 
 void updatePlayer(Player *pl)
 {
-    float ground_y = SCREEN_HEIGHT - P_HEIGHT - FRAME_SIZE;
+    float ground_y = P_HEIGHT - (CFRAME_SIZE*2);
 
     // Gravity only if not on ground
     if (!pl->onGround)
@@ -158,8 +158,8 @@ void updatePlayer(Player *pl)
         pl->y += pl->velocity.y * TIME_STEP;     // Update position
 
         // Ground collision
-        if (pl->y >= ground_y) {
-            pl->y = ground_y;
+        if (pl->y +64 >= P_HEIGHT) {
+            pl->y = P_HEIGHT-64.0f;
             pl->velocity.y = 0;
             pl->onGround = true;
         }
@@ -172,7 +172,12 @@ void updatePlayer(Player *pl)
     if (IsKeyDown(KEY_RIGHT) || IsKeyDown(KEY_D)) {
         pl->x += 200 * GetFrameTime();
     }
-
+    if (IsKeyDown(KEY_UP) || IsKeyDown(KEY_W)) {
+        pl->y -= 200 * GetFrameTime();
+    }
+    if (IsKeyDown(KEY_DOWN) || IsKeyDown(KEY_S)) {
+        pl->y += 200 * GetFrameTime();
+    }
     // Clamp player within screen
 //    if (pl->x < 0) pl->x = 0;
 //    if (pl->x > SCREEN_WIDTH - FRAME_SIZE) pl->x = SCREEN_WIDTH - FRAME_SIZE;
@@ -187,7 +192,7 @@ int main() {
     SetTargetFPS(60);
     Player player = {
 		.x = 40,
-		.y = SCREEN_HEIGHT - P_HEIGHT - FRAME_SIZE -120,
+		.y = P_HEIGHT - CFRAME_SIZE *2,
 		.velocity.x = 0,
 		.velocity.y = 0,
 		.onGround = true,
@@ -255,7 +260,7 @@ int main() {
     {
         buildings[i].width = (float)GetRandomValue(50, 200);
         buildings[i].height = (float)GetRandomValue(100, 800);
-        buildings[i].y = SCREEN_HEIGHT - 130.0f - buildings[i].height;
+        buildings[i].y = SCREEN_HEIGHT - 300.0f - buildings[i].height;
         buildings[i].x = -6000.0f + spacing;
 
         spacing += (int)buildings[i].width;
@@ -267,7 +272,7 @@ int main() {
             255};
     }
 
-    SetTargetFPS(60);
+
     while (!WindowShouldClose())
     {
     // if (IsKeyPressed(KEY_SPACE)) {
@@ -313,7 +318,7 @@ int main() {
         ClearBackground(GREEN);
 
 		 BeginMode2D(camera);
-		DrawRectangle(-6000, 320, 13000, 8000, DARKGRAY);
+		DrawRectangle(-6000, P_HEIGHT, 13000, 8000, DARKGRAY);
 
                 for (int i = 0; i < MAX_BUILDINGS; i++) DrawRectangleRec(buildings[i], buildColors[i]);
 	Rectangle player_frame = animation_frame(&anim, 4, CFRAME_SIZE);
