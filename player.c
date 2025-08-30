@@ -13,13 +13,11 @@ void updatePlayer(Player *pl)
 {
     float ground_y = SCREEN_HEIGHT - P_HEIGHT - FRAME_SIZE;
 
-    // Gravity only if not on ground
     if (!pl->onGround)
     {
-        pl->velocity.y += GRAVITY * TIME_STEP;   // Apply gravity
-        pl->y += pl->velocity.y * TIME_STEP;     // Update position
+        pl->velocity.y += GRAVITY * TIME_STEP;  
+        pl->y += pl->velocity.y * TIME_STEP;     
 
-        // Ground collision
         if (pl->y >= ground_y) {
             pl->y = ground_y;
             pl->velocity.y = 0;
@@ -27,7 +25,6 @@ void updatePlayer(Player *pl)
         }
     }
 
-    // Horizontal movement
     if (IsKeyDown(KEY_LEFT) || IsKeyDown(KEY_A)) {
         pl->x -= 200 * GetFrameTime();
     }
@@ -35,7 +32,6 @@ void updatePlayer(Player *pl)
         pl->x += 200 * GetFrameTime();
     }
 
-    // Clamp player within screen
     if (pl->x < 0) pl->x = 0;
     if (pl->x > SCREEN_WIDTH - FRAME_SIZE) pl->x = SCREEN_WIDTH - FRAME_SIZE;
   
