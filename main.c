@@ -13,7 +13,6 @@
 #define B_FRAME_SIZE 250.0f
 
 
-
 #define GRAVITY 9.8f
 #define TIME_STEP 0.1f
 #define P_HEIGHT 300.0f
@@ -21,6 +20,10 @@
 #define MAX_BUILDINGS   100
 
 
+#define MAX_ANIMALS 50
+#define MAX_PLANTS 100
+
+#define SUPPORT_FILEFORMAT_MP3// too enable this audio format
 //--------types---------
 typedef struct Position{
 	float x,y,z;
@@ -34,41 +37,10 @@ typedef enum Direction {
   LEFT = -1,
   RIGHT = 1,
 } Direction;
-// -------- entities-----------
-typedef struct Player{
-  float x,y;
-  Velocity velocity;
-  bool onGround;
-  Texture2D player_texture;
-	Rectangle frame;
-}Player;
-
-typedef enum Entities{
-  PLAYER = 0,
-  ANIMAL,
-  CROP ,
-  BUDDY ,
-  FOOD,
-}Entities;
-
-typedef struct Animal{
-	Position position;
-	Texture2D texture;
-	float happiness;
-	float hunger;
-}Animal;
-
-typedef struct Crop{
-	Position position;
-	float growth_stage;
-	float timer;
-}Crop;
-
 typedef enum AnimationType {
   REPEATING = 0,
   ONESHOT ,
 } AnimationType;
-
 
 // the range domain of the animation if [first, last], inclusive on both ends
 typedef struct Animation {
@@ -90,6 +62,59 @@ typedef struct Animation {
   AnimationType type;
 } Animation;
 
+//---------data--------------
+
+// -------- entities-----------
+typedef struct Player{
+	//Position position;
+	float x,y;
+	Velocity velocity;
+	bool onGround;
+	Texture2D player_texture;
+	Rectangle frame;
+	int selected_item;
+}Player;
+
+typedef enum Entities{
+  PLAYER = 0,
+  ANIMAL,
+  CROP ,
+  BUDDY ,
+  FOOD,
+}Entities;
+
+typedef struct Animal{
+	Position position;
+	Texture2D texture;
+	char name[20];
+	float happiness;
+	float hunger;
+	bool isFed;
+	Rectangle interactionZone;
+}Animal;
+typedef enum CropState {
+    CROP_SEEDLING,
+    CROP_GROWING,
+    CROP_READY,
+    CROP_EMPTY
+} CropState;
+typedef struct Crop {
+    Position position;
+    CropState state;
+    float growth;
+    Texture2D texture;
+} Plant;
+
+typedef struct Game {
+    Animal animals;
+    Plant plants;
+    Player player;
+    Camera2D camera;
+    Texture2D animalTexture;
+    Texture2D plantTexture;
+} Game;
+
+// ------ data modifiers ----------
 void animation_update(Animation *self) {
   float dt = GetFrameTime();
   self->duration_left -= dt;
@@ -271,10 +296,14 @@ int main() {
             (unsigned char)GetRandomValue(200, 250),
             255};
     }
-
-
+// temporary audio just for me to feel better while running the game
+InitAudioDevice();
+Music music = LoadMusicStream("./resources/music/melancholy.mp3.mp3"); // or "audio.ogg"
+PlayMusicStream(music);
     while (!WindowShouldClose())
     {
+    UpdateMusicStream(music);
+
     // if (IsKeyPressed(KEY_SPACE)) {
     //   anim.cur = anim.first;
     // }
@@ -378,9 +407,11 @@ int main() {
         DrawFPS(10, SCREEN_HEIGHT - 30);
         EndDrawing();
 
+
         
         }
-
+UnloadMusicStream(music);
+CloseAudioDevice();
     UnloadTexture(player.player_texture);
     // UnloadImage(angel);
 
