@@ -1,31 +1,29 @@
+// A small, readable, data-oriented example using raylib
 #include <raylib.h>
 #include <stdio.h>
 #include <string.h>
 #include <time.h>
 
+// ------------------------------------------------------------
+// Config (keep all tunables here)
+// ------------------------------------------------------------
 #define SCREEN_WIDTH 1200
 #define SCREEN_HEIGHT 600
 
-#define FRAME_SIZE 100.0f
+// Logical ground height (a flat floor at the bottom of the screen)
+#define GROUND_HEIGHT 35.0f // previously P_HEIGHT
+
+// Source sprite frame size (square spritesheets)
 #define CFRAME_SIZE 32.0f
 
-
+// Physics
 #define GRAVITY 9.8f
-#define TIME_STEP 0.1f
-#define P_HEIGHT 35.0f
 #define JUMP_VELOCITY -45.0f
+#define MOVE_SPEED 200.0f
 
-typedef struct
-{
-  float x,y;
-  struct {
-    float x,y;
-  } velocity;
-  bool onGround;
-  Texture2D player_texture;
-}Player;
-
-
+// ------------------------------------------------------------
+// Animation primitives
+// ------------------------------------------------------------
 typedef enum AnimationType {
   REPEATING = 1,
   ONESHOT = 2,
@@ -38,258 +36,181 @@ typedef enum Direction {
   RIGHT = 1,
 } Direction;
 
-// the range domain of the animation if [first, last], inclusive on both ends
+
+// the range domain of the animation is [first, last], inclusive
 typedef struct Animation {
-  // the index of the first frame
-  int first;
-  // the index of the last frame
-  int last;
-  // the current frame index
-  int cur;
-  // how far we jump when going to the next frame. For a normal, sequential
-  // anim, this is 1
-  int step;
-
-  // how long each frame lasts
-  float speed;
-  // how much time is left on the current frame
-  float duration_left;
-
-  AnimationType type;
+  int first;           // index of first frame
+  int last;            // index of last frame
+  int cur;             // current frame index
+  int step;            // index increment each frame (1 for forward, -1 for reverse)
+  float speed;         // seconds per frame
+  float time_left;     // time remaining on current frame
+  AnimationType type;  // repeat vs one-shot
 } Animation;
 
-void animation_update(Animation *self) {
+typedef struct SpriteSheet {
+  Texture2D texture;
+  int frames_per_row;
+  int frame_size; // pixels (square source frames)
+} SpriteSheet;
+
+static inline void animation_update(Animation *self) {
   float dt = GetFrameTime();
-  self->duration_left -= dt;
+  self->time_left -= dt;
 
-  if (self->duration_left <= 0.0) {
-    // go to the next frame and reset the state of the animation
-    self->duration_left = self->speed;
-    self->cur++;
+  if (self->time_left > 0.0f) return;
 
-    // CHALLENGE: find a way to turn these two if statements into one
-    // (hint. use the value of step in the if statement?)
-    if (self->cur > self->last) {
-      // handle reaching the end of the animation going forwards
-      switch (self->type) {
-      case REPEATING:
-        self->cur = self->first;
-        break;
-      case ONESHOT:
-        self->cur = self->last;
-        break;
-      }
-    } else if (self->cur <= self->first) {
-      // handle reaching the end (which is the beginning) of an animation going
-      // backwards
-      switch (self->type) {
-      case REPEATING:
-        self->cur = self->last;
-        break;
-      case ONESHOT:
-        self->cur = self->first;
-        break;
-      }
-    }
+  // advance frame and reset timer
+  self->time_left += self->speed; // carry over small negative remainder
+  self->cur += self->step;
+
+  // unified boundary handling using sign of step
+  if (self->step > 0 && self->cur > self->last) {
+    if (self->type == REPEATING) self->cur = self->first; else self->cur = self->last;
+  } else if (self->step < 0 && self->cur < self->first) {
+    if (self->type == REPEATING) self->cur = self->last; else self->cur = self->first;
   }
 }
 
-Rectangle animation_frame(Animation *self, int num_frames_per_row, int frame_size) {
-  // memorize this! Converting from index -> coord and vice versa is extremely
-  // common in game development For example, Minecraft stores a chunk in a 1D
-  // array. The coordinates are retrieved using this method (with a third
-  // dimension of course).
-  int x = (self->cur % num_frames_per_row) * frame_size;
-  int y = (self->cur / num_frames_per_row) * frame_size;
-
-  return (Rectangle){
-      .x = (float)x,
-      .y = (float)y,
-      .width = frame_size,
-      .height = frame_size};
+static inline Rectangle animation_src_rect(const Animation *self, const SpriteSheet *sheet) {
+  // Convert linear index -> sprite sheet coordinates
+  int x = (self->cur % sheet->frames_per_row) * sheet->frame_size;
+  int y = (self->cur / sheet->frames_per_row) * sheet->frame_size;
+  return (Rectangle){ (float)x, (float)y, (float)sheet->frame_size, (float)sheet->frame_size };
 }
 
-void LoadAssets()
-{
-    // Image angel = LoadImage("/resources/angelmouse.ase");
-    // Texture2D player_texture = LoadTextureFromImage(angel);
+// ------------------------------------------------------------
+// Player
+// ------------------------------------------------------------
+typedef struct Player {
+  Vector2 pos;
+  Vector2 vel;
+  bool on_ground;
+  Direction facing;
+  SpriteSheet sheet;
+  Animation anim;
+} Player;
+
+static inline float ground_y(void) {
+  return SCREEN_HEIGHT - GROUND_HEIGHT - CFRAME_SIZE; // 32px tall sprite
 }
 
-void updatePlayer(Player *pl)
-{
-    float ground_y = SCREEN_HEIGHT - P_HEIGHT - FRAME_SIZE;
-
-    // Gravity only if not on ground
-    if (!pl->onGround)
-    {
-        pl->velocity.y += GRAVITY * TIME_STEP;   // Apply gravity
-        pl->y += pl->velocity.y * TIME_STEP;     // Update position
-
-        // Ground collision
-        if (pl->y >= ground_y) {
-            pl->y = ground_y;
-            pl->velocity.y = 0;
-            pl->onGround = true;
-        }
-    }
-
-    // Horizontal movement
-    if (IsKeyDown(KEY_LEFT) || IsKeyDown(KEY_A)) {
-        pl->x -= 200 * GetFrameTime();
-    }
-    if (IsKeyDown(KEY_RIGHT) || IsKeyDown(KEY_D)) {
-        pl->x += 200 * GetFrameTime();
-    }
-
-    // Clamp player within screen
-    if (pl->x < 0) pl->x = 0;
-    if (pl->x > SCREEN_WIDTH - FRAME_SIZE) pl->x = SCREEN_WIDTH - FRAME_SIZE;
-  
+static void player_init(Player *p, Texture2D texture) {
+  p->pos = (Vector2){10, ground_y()};
+  p->vel = (Vector2){0, 0};
+  p->on_ground = true;
+  p->facing = RIGHT;
+  p->sheet = (SpriteSheet){ .texture = texture, .frames_per_row = 4, .frame_size = (int)CFRAME_SIZE };
+  p->anim = (Animation){ .first = 0, .last = 3, .cur = 0, .step = 1, .speed = 0.1f, .time_left = 0.1f, .type = REPEATING };
 }
 
-int main() {
-    InitWindow(SCREEN_WIDTH, SCREEN_HEIGHT, "C raylib template");
-    SetTargetFPS(60);
+static void player_input(Player *p) {
+  float dt = GetFrameTime();
+  float dx = 0.0f;
+  if (IsKeyDown(KEY_LEFT) || IsKeyDown(KEY_A)) { dx -= MOVE_SPEED * dt; p->facing = LEFT; }
+  if (IsKeyDown(KEY_RIGHT) || IsKeyDown(KEY_D)) { dx += MOVE_SPEED * dt; p->facing = RIGHT; }
+  p->pos.x += dx;
 
-    Player player ;
-    player.x = 10;
-    player.y = SCREEN_HEIGHT - P_HEIGHT - FRAME_SIZE;
-    player.velocity.x = 0;
-    player.velocity.y = 0;
-    player.onGround = true;
-    // when no need to modify image should directly load the texture saving cpu memory of image space
-    // player.player_texture = LoadTexture("resources/angelcatt.png");
-    Texture2D angel_texture = LoadTexture("resources/angelcatt.png");
-    player.player_texture = LoadTexture("resources/chomp_idle.png");
-    Texture2D brocolli_texture = LoadTexture("resources/Vegetables_/One/Broccoli.png");
-        // Animation anim = (Animation){
-        //     .first = 0,
-        //     .last = 3,
-        //     .cur = 0,
-        //     .step = 1,
-        //     .speed = 0.1,
-        //     .duration_left = 0.1,
-        //     .type = REPEATING,
-        // };
+  if (IsKeyPressed(KEY_SPACE) && p->on_ground) {
+    p->vel.y = JUMP_VELOCITY;
+    p->on_ground = false;
+  }
+}
 
-        // Animation anim2 = (Animation){
-        //     .first = 0,
-        //     .last = 3,
-        //     .cur = 0,
-        //     .step = 1,
-        //     .speed = 0.1,
-        //     .duration_left = 0.1,
-        //     .type = ONESHOT,
-        // };
+static void player_physics(Player *p) {
+  float dt = GetFrameTime();
+  if (!p->on_ground) {
+    p->vel.y += GRAVITY * dt;
+    p->pos.y += p->vel.y * dt;
+    // floor collision
+    if (p->pos.y >= ground_y()) {
+      p->pos.y = ground_y();
+      p->vel.y = 0.0f;
+      p->on_ground = true;
+    }
+  }
 
-        // Animation reverse_anim = (Animation){
-        //     .first = 0,
-        //     .last = 3,
-        //     .cur = 3,
-        //     .step = -1,
-        //     .speed = 0.1,
-        //     .duration_left = 0.1,
-        //     .type = REPEATING,
-        // };
-        Animation anim = {0, 3, 0, 1, 0.1, 0.1, REPEATING};
-        Animation anim2 = {0, 3, 0, 1, 0.1, 0.1, ONESHOT};
-        Animation reverse_anim = {0, 3, 3, -1, 0.1, 0.1, REPEATING};
-        Animation chomp_anim = {0, 34, 0, 1, 0.1, 0.1, REPEATING};
-        Animation brocolli_anim = {0, 0, 0, 1, 0.2, 0.2, REPEATING};
-        Direction player_direction = LEFT;
+  // keep within screen horizontally
+  if (p->pos.x < 0) p->pos.x = 0;
+  if (p->pos.x > SCREEN_WIDTH - CFRAME_SIZE) p->pos.x = SCREEN_WIDTH - CFRAME_SIZE;
+}
 
+static void player_update(Player *p) {
+  player_input(p);
+  player_physics(p);
+  animation_update(&p->anim);
+}
 
+static void player_draw(const Player *p) {
+  Rectangle src = animation_src_rect(&p->anim, &p->sheet);
+  src.width *= (float)p->facing; // flip when facing left
+  Rectangle dst = { p->pos.x, p->pos.y, CFRAME_SIZE, CFRAME_SIZE };
+  DrawTexturePro(p->sheet.texture, src, dst, (Vector2){0,0}, 0.0f, WHITE);
+}
 
-    // // 
-    // Image angel = LoadImage("resources/angelcatt.png");
-    // Texture2D player_texture = LoadTextureFromImage(angel);
-    // UnloadImage(angel); 
+// ------------------------------------------------------------
+// Simple actor: Broccoli sprite
+// ------------------------------------------------------------
+typedef struct ActorSprite {
+  Vector2 pos;
+  SpriteSheet sheet;
+  Animation anim;
+} ActorSprite;
 
-    while (!WindowShouldClose())
-    {
-    // if (IsKeyPressed(KEY_SPACE)) {
-    //   anim.cur = anim.first;
-    // }
+static inline void actor_update(ActorSprite *a) {
+  animation_update(&a->anim);
+}
 
-    // if (IsKeyPressed(KEY_LEFT || KEY_A)) {
-    //   player_direction = LEFT;
-    // }
-    // if (IsKeyPressed(KEY_RIGHT || KEY_D)) {
-    //   player_direction = RIGHT;
-    // }
-    // if (IsKeyPressed(KEY_X))
-    // {
-    //     anim2.cur= anim2.first;
-    // }
-            if (IsKeyPressed(KEY_SPACE) && player.onGround) {
-            player.velocity.y = JUMP_VELOCITY;
-            player.onGround = false;
-        }
+static inline void actor_draw(const ActorSprite *a) {
+  Rectangle src = animation_src_rect(&a->anim, &a->sheet);
+  Rectangle dst = { a->pos.x, a->pos.y, CFRAME_SIZE, CFRAME_SIZE };
+  DrawTexturePro(a->sheet.texture, src, dst, (Vector2){0,0}, 0.0f, WHITE);
+}
 
-        if (IsKeyPressed(KEY_LEFT) || IsKeyPressed(KEY_A)) {
-            player_direction = LEFT;
-        }
-        if (IsKeyPressed(KEY_RIGHT) || IsKeyPressed(KEY_D)) {
-            player_direction = RIGHT;
-        }
-        if (IsKeyPressed(KEY_X)) {
-            anim2.cur = anim2.first;
-        }
+int main(void) {
+  InitWindow(SCREEN_WIDTH, SCREEN_HEIGHT, "Raylib demo - data oriented");
+  SetTargetFPS(60);
 
-        animation_update(&anim);
-        animation_update(&anim2);
-        animation_update(&chomp_anim);
-        updatePlayer(&player);
+  // Load textures once, own them in small structs
+  Texture2D texPlayer = LoadTexture("resources/chomp_idle.png");
+  Texture2D texBroccoli = LoadTexture("resources/Vegetables_/One/Broccoli.png");
 
-        BeginDrawing();
+  Player player; 
+  player_init(&player, texPlayer);
 
-        ClearBackground(GREEN);
-/** 
-        // DrawTextureV(player_texture,(Vector2){10,10},WHITE);
-        DrawRectangleV((Vector2){0,GetScreenHeight() - P_HEIGHT},(Vector2){GetScreenWidth(), P_HEIGHT}, GRAY);
+  ActorSprite broccoli = {
+    .pos = (Vector2){200, ground_y()},
+    .sheet = (SpriteSheet){ .texture = texBroccoli, .frames_per_row = 4, .frame_size = (int)CFRAME_SIZE },
+    .anim = (Animation){ .first = 0, .last = 0, .cur = 0, .step = 1, .speed = 0.2f, .time_left = 0.2f, .type = REPEATING }
+  };
 
+  while (!WindowShouldClose()) {
+    // Update
+    player_update(&player);
+    actor_update(&broccoli);
 
-        Rectangle player_frame = animation_frame(&anim, 4);
-        player_frame.width *= player_direction;
-        Rectangle kk = {10, 10, 100, 100};
-        Rectangle kk2 = {200, 10, 100, 100};
+    // Draw
+    BeginDrawing();
+      ClearBackground(GREEN);
 
-        // playing animation
-        DrawTexturePro(player.player_texture, player_frame, kk, (Vector2){0, 0}, 0.0f, WHITE);
+      // Ground
+      DrawRectangleV((Vector2){0, SCREEN_HEIGHT - GROUND_HEIGHT}, (Vector2){SCREEN_WIDTH, GROUND_HEIGHT}, GRAY);
 
-        // attack animation
-        // DrawTexturePro(player.player_texture, animation_frame(&anim2, 4), kk2, (Vector2){0, 0}, 0.0f, WHITE);
-        DrawTexturePro(player.player_texture, 
-          animation_frame(&anim, 4),
-          (Rectangle){10, 10, 100, 100}, 
-          (Vector2){0, 0}, 0.0f,
-           WHITE);
-**/
+      // Entities
+      player_draw(&player);
+      actor_draw(&broccoli);
 
-        DrawRectangleV((Vector2){0, SCREEN_HEIGHT - P_HEIGHT}, (Vector2){SCREEN_WIDTH, P_HEIGHT}, GRAY);
+      // UI
+      DrawText("SPACE = jump", 10, 10, 20, BLACK);
+      DrawText("A/D or Left/Right = move", 10, 40, 20, BLACK);
+      DrawFPS(10, SCREEN_HEIGHT - 30);
+    EndDrawing();
+  }
 
-        // Angel animation
-        Rectangle player_frame = animation_frame(&anim, 4, CFRAME_SIZE);
-        player_frame.width *= player_direction; // Flip horizontally
-        Rectangle angel_rect = {player.x, player.y, CFRAME_SIZE, CFRAME_SIZE};
-        DrawTexturePro(player.player_texture, player_frame, angel_rect, (Vector2){0, 0}, 0.0f, WHITE);
+  // Cleanup
+  UnloadTexture(texPlayer);
+  UnloadTexture(texBroccoli);
 
-        Rectangle brocolli_frame = animation_frame(&brocolli_anim, 4, CFRAME_SIZE);
-        Rectangle brocolli_rect = {player.x, player.y, CFRAME_SIZE, CFRAME_SIZE};
-        DrawTexturePro(brocolli_texture, brocolli_frame, brocolli_rect, (Vector2){200, 0}, 0.0f, WHITE);
-        
-        // Draw controls
-        DrawText("Press SPACE to jump (Angel)", 10, 10, 20, BLACK);
-        DrawText("Press A/D or LEFT/RIGHT to move (Angel)", 10, 40, 20, BLACK);
-        DrawFPS(10, SCREEN_HEIGHT - 30);
-        EndDrawing();
-
-        
-        }
-
-    UnloadTexture(player.player_texture);
-    // UnloadImage(angel);
-    UnloadTexture(player.player_texture);
-    CloseWindow();
-    return 0;
+  CloseWindow();
+  return 0;
 }
